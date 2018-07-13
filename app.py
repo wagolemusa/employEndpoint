@@ -1,47 +1,22 @@
-from flask import Flask,jsonify,request
-from flask_jwt import JWT, jwt_required, current_identity
+from flask import Flask,jsonify,request, make_response
+#from flask_jwt import JWT, jwt_required, current_identity
 from werkzeug.security import safe_str_cmp
 import jwt
-class User(object):
-    def __init__(self, id, username, password):
-        self.id = id
-        self.username = username
-        self.password = password
-
-    def __str__(self):
-        return "User(id='%s')" % self.id
-
-users = [
-    User(1, 'user1', 'abcxyz'),
-    User(2, 'user2', 'abcxyz'),
-]
-
-username_table = {u.username: u for u in users}
-userid_table = {u.id: u for u in users}
-
-def authenticate(username, password):
-    user = username_table.get(username, None)
-    if user and safe_str_cmp(user.password.encode('utf-8'), password.encode('utf-8')):
-        return user
-
-def identity(payload):
-    user_id = payload['identity']
-    return userid_table.get(user_id, None)
+import datetime
+from functools import wraps
+#import pyjwt
 
 app = Flask(__name__)
-app.debug = True
-app.config['SECRET_KEY'] = 'super-secret'
 
-jwt = JWT(app, authenticate, identity)
-
-
-
+app.config['SECRET_KEY'] = 'refuge'
 empDB=[
 
 {
     'id':'10',
-    'name':'savanaj',
+    'username':'refuge',
+    'password': 'wise12',
     'title':'Tevelling so much'
+
 },
 {
     'id':'20',
@@ -50,17 +25,45 @@ empDB=[
 }
 ]
 
-@app.route('/protected')
-@jwt_required()
-def protected():
-    return '%s' % current_identity
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if request.args.get('token')=='':
+            return jsonify({"message": 'You need to first Login'})
+        try:
+            data=jwt.decode(request.args.get('token'), app.config['SECRET_KEY'])
+
+        except:
+            return jsonify({"Alert":'please login again'})
+        return f(*args, **kwargs)
+    return decorated
+
+
+
 
 
 @app.route('/')
 def home():
     return "Hello refuge wise"
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    username = request.get_json()['username']
+    password = request.get_json()['password']
+    if username == empDB[0]['username']:
+        if password == empDB[0]['password']:
+            token = jwt.encode({"username":username, "password":password, "exp":datetime.datetime.utcnow()+datetime.timedelta(minutes=20)},app.config['SECRET_KEY'])
+            return jsonify({"token":token.decode('utf-8')})
+        else:
+            return jsonify({"message":"Invalid credentials"})
+    else:
+        return jsonify({"message":"Invalid credentials"})
+
+
 # get employee 
 @app.route('/empdb/employee', methods=['GET'])
+@login_required
 def getAllEmp():
     return jsonify({'emps': empDB})
 
